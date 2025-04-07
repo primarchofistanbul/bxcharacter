@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BX Character Generator</title>
+  <style>
+    body { font-family: monospace; padding: 2rem; background: #f4f4f4; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; margin-right: 0.5rem; }
+    .sheet { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-top: 1rem; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>BX Character Generator</h1>
+  <button onclick="generateCharacter()">Generate Character</button>
+  <button onclick="generateMultipleCharacters(6)">Generate 6 Characters</button>
+  <button onclick="downloadCharacter()">Download as Text File</button>
+  <div class="sheet">
+    <pre id="characterSheet">Click the button to create a character...</pre>
+  </div>
+
+  <script>
+    const classes = {
+      Fighter: { hd: 8, saves: [12, 13, 14, 15, 16], abilities: "Combat mastery.", age: [15, 18] },
+      Cleric: { hd: 6, saves: [11, 12, 14, 16, 15], abilities: "Turn undead, divine spells.", age: [18, 22] },
+      MagicUser: { hd: 4, saves: [13, 14, 13, 16, 15], abilities: "Arcane spells.", age: [24, 32] },
+      Thief: { hd: 4, saves: [13, 14, 13, 16, 15], abilities: "Lockpicks (15%), Disarm (10%), Pickpokect (20%), Stealth (20%), Climb (87%), Hide (10%), Hear (2/6)", age: [18, 22] },
+      Dwarf: { hd: 8, saves: [10, 11, 12, 13, 14], abilities: "Infravision, detect construction.", age: [40, 60] },
+      Elf: { hd: 6, saves: [12, 13, 13, 15, 15], abilities: "Arcane spells, infravision.", age: [130, 160] },
+      Halfling: { hd: 6, saves: [10, 11, 12, 13, 14], abilities: "Stealth, missile bonus.", age: [30, 32] }
+    };
+
+    const alignments = ["Lawful", "Neutral", "Chaotic"];
+
+    const equipmentPacks = [
+      "Backpack, rations (1 week), waterskin, 50' rope, 10 torches, tinderbox",
+      "Sack, 6 iron spikes, mallet, 10' pole, rations (1 week), flask of oil",
+      "Lantern, 2 flasks of oil, iron rations, small mirror, wineskin, garlic",
+      "Small tent, bedroll, flint and steel, 2 days of trail rations",
+      "Hunting trap, 3 days of fresh meat, a small skinning knife",
+      "Fishing rod, 100 ft of fishing line, 5 days of dried fish",
+      "Climbing gear (pitons, rope, hammer), 3 days of rations",
+      "Crowbar, hammer, 10 iron spikes, 2 days of rations",
+      "100' silk rope, grappling hook, 3 days of rations",
+      "Large sack, 2 days of rations, 50' hemp rope",
+      "Small cart, 2 days of rations, a shovel",
+      "Mirror, 10' pole, 2 days of rations",
+      "Silver mirror, 2 days of rations, a set of fine clothes",
+      "Spyglass, 2 days of rations, a set of maps",
+      "Disguise kit, 2 days of rations, a set of false papers",
+      "A small musical instrument, 2 days of rations, a set of performance clothes",
+      "50' of chain, small bell, 3 days of rations",
+      "Bear traps (2), 2 days of rations, a small saw",
+      "Chalk (10 pieces), small hammer, 2 days of rations",
+      "Iron rations (3 days), a tinderbox, a waterskin",
+      "A small hand mirror, 2 days of rations, a set of fine combs",
+      "A small chest, 2 days of rations, a set of lock picks",
+      "A small hunting horn, 2 days of rations, a set of hunting arrows",
+      "A small writing kit, 2 days of rations, a set of parchment",
+      "A small set of dice, 2 days of rations, a deck of cards"
+    ];
+
+    const armorOptions = [
+      "Clothing (no armor)",
+      "Leather",
+      "Chainmail",
+      "Chainmail and shield",
+      "Platemail",
+      "Platemail and shield"
+    ];
+
+    const weaponOptions = [
+      "Battle axe 1d8",
+      "Club 1d4",
+      "Crossbow 1d6 (range 30')",
+      "Dagger 1d4",
+      "Hand axe 1d6",
+      "Javelin 1d4 (range 90')",
+      "Lance 1d6",
+      "Long bow 1d6 (range 210')",
+      "Mace 1d6",
+      "Pole arm 1d10",
+      "Short bow 1d6 (range 150')",
+      "Short sword 1d6",
+      "Silver dagger 1d4",
+      "Sling 1d4 (range 160')",
+      "Spear 1d6",
+      "Staff 1d4",
+      "Sword 1d8",
+      "Two-handed sword 1d10",
+      "Warhammer 1d6",
+      "Flail 1d6",
+      "Morning star 1d6",
+      "Whip 1d3",
+      "Trident 1d6",
+      "Net (entangle only)",
+      "Blowgun 1d3 (range 60')"
+    ];
+
+    const abilityMods = score => score <= 3 ? -3 : score <= 5 ? -2 : score <= 8 ? -1 : score <= 12 ? 0 : score <= 15 ? 1 : score <= 17 ? 2 : 3;
+
+    function getAbilityExtras(stat, mod, score) {
+      switch (stat) {
+        case 'STR': return `(Melee: ${mod >= 0 ? '+' : ''}${mod}, Open doors: ${[1, 1, 1, 2, 3, 4, 5][mod + 3]}/6)`;
+        case 'INT': {
+          const lang = mod <= -2 ? "Native (broken)" : `Native${mod >= 1 ? ` +${mod}` : ''}`;
+          const literacy = mod <= -1 ? "Illiterate" : "Literate";
+          return `(Languages: ${lang}, Literacy: ${literacy})`;
+        }
+        case 'WIS': return `(Saves vs magic: ${mod >= 0 ? '+' : ''}${mod})`;
+        case 'DEX': return `(AC: ${dexACMod(score)}, Missile: ${dexMissileMod(score)})`;
+        case 'CON': return `(HP modifier: ${mod >= 0 ? '+' : ''}${mod})`;
+        case 'CHA': {
+          const maxRetainers = [1, 2, 3, 4, 5, 6, 7][mod + 3];
+          const loyalty = [4, 5, 6, 7, 8, 9, 10][mod + 3];
+          return `(NPC Reaction: ${mod >= 0 ? '+' : ''}${mod}, Max Retainers: ${maxRetainers}, Loyalty: ${loyalty})`;
+        }
+        default: return '';
+      }
+    }
+
+    function dexACMod(score) {
+      if (score === 3) return '+3';
+      if (score >= 4 && score <= 5) return '+2';
+      if (score >= 6 && score <= 8) return '+1';
+      if (score >= 9 && score <= 12) return '0';
+      if (score >= 13 && score <= 15) return '-1';
+      if (score >= 16 && score <= 17) return '-2';
+      if (score === 18) return '-3';
+      return '0';
+    }
+
+    function dexMissileMod(score) {
+      if (score === 3) return '-3';
+      if (score >= 4 && score <= 5) return '-2';
+      if (score >= 6 && score <= 8) return '-1';
+      if (score >= 9 && score <= 12) return '0';
+      if (score >= 13 && score <= 15) return '+1';
+      if (score >= 16 && score <= 17) return '+2';
+      if (score === 18) return '+3';
+      return '0';
+    }
+
+    function getMovementRate(armor) {
+      switch (armor) {
+        case "Clothing (no armor)":
+        case "Leather":
+          return "120' (40')";
+        case "Chainmail":
+        case "Chainmail and shield":
+          return "90' (30')";
+        case "Platemail":
+        case "Platemail and shield":
+          return "60' (20')";
+        default:
+          return "120' (40')"; // Default if no armor is recognized
+      }
+    }
+
+    function rollStat() {
+      return [...Array(3)].map(_=>1+Math.floor(Math.random()*6)).reduce((a,b)=>a+b);
+    }
+
+    function rollStartingGold() {
+      return Math.floor(Math.random() * 178 + 3);
+    }
+
+    function rollHP(hd, conMod) {
+      return Math.max(1, Math.floor(Math.random() * hd + 1) + conMod);
+    }
+
+    function pickClass() {
+      const classList = Object.keys(classes);
+      return classList[Math.floor(Math.random() * classList.length)];
+    }
+
+    function pickAlignment() {
+      return alignments[Math.floor(Math.random() * alignments.length)];
+    }
+
+    function getRace(cls) {
+      return ["Fighter", "Cleric", "MagicUser", "Thief"].includes(cls) ? "Human" : cls;
+    }
+
+    function getAge(cls) {
+      const [min, max] = classes[cls].age;
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function getAC(armor) {
+      const base = {
+        "Clothing (no armor)": 9,
+        "Leather": 7,
+        "Chainmail": 5,
+        "Chainmail and shield": 4,
+        "Platemail": 3,
+        "Platemail and shield": 2
+      };
+      return base[armor] || 9;
+    }
+
+    function getXPBonus(intMod, wisMod, strMod, dexMod, cls) {
+      if (cls === "MagicUser") return intMod >= 1 ? "+5%" : intMod <= -1 ? "-5%" : "0%";
+      if (cls === "Cleric") return wisMod >= 1 ? "+5%" : wisMod <= -1 ? "-5%" : "0%";
+      if (cls === "Fighter" || cls === "Dwarf") return strMod >= 1 ? "+5%" : strMod <= -1 ? "-5%" : "0%";
+      if (cls === "Thief" || cls === "Halfling") return dexMod >= 1 ? "+5%" : dexMod <= -1 ? "-5%" : "0%";
+      if (cls === "Elf") return intMod >= 1 || strMod >= 1 ? "+5%" : intMod <= -1 || strMod <= -1 ? "-5%" : "0%";
+      return "0%";
+    }
+
+    function getAbilityDetail(score, label) {
+      const mod = abilityMods(score);
+      return `${score} (${mod >= 0 ? '+' : ''}${mod}) ${getAbilityExtras(label, mod, score)}`;
+    }
+
+    function buildCharacter() {
+      const STR = rollStat();
+      const INT = rollStat();
+      const WIS = rollStat();
+      const DEX = rollStat();
+      const CON = rollStat();
+      const CHA = rollStat();
+
+      const strMod = abilityMods(STR);
+      const intMod = abilityMods(INT);
+      const wisMod = abilityMods(WIS);
+      const conMod = abilityMods(CON);
+      const chaMod = abilityMods(CHA);
+
+      const cls = pickClass();
+      const race = getRace(cls);
+      const alignment = pickAlignment();
+      const hd = classes[cls].hd;
+      const saves = classes[cls].saves;
+      const hp = rollHP(hd, conMod);
+      const gold = rollStartingGold();
+      const pack = equipmentPacks[Math.floor(Math.random() * equipmentPacks.length)];
+
+      let armor;
+      if (cls === "MagicUser") {
+        armor = "Clothing (no armor)";
+      } else if (cls === "Thief") {
+        armor = "Leather";
+      } else {
+        armor = armorOptions[Math.floor(Math.random() * armorOptions.length)];
+      }
+
+      const weapon = weaponOptions[Math.floor(Math.random() * weaponOptions.length)];
+      const ac = getAC(armor);
+      const xpBonus = getXPBonus(intMod, wisMod, strMod, DEX, cls);
+      const age = getAge(cls);
+      const movementRate = getMovementRate(armor);
+
+      let classEquipment = "";
+      if (cls === "Thief") {
+        classEquipment = "A set of thieves' tools, ";
+      } else if (cls === "Cleric") {
+        classEquipment = "A holy symbol, a book of prayer, holy water (1 flask), ";
+      } else if (cls === "MagicUser") {
+        classEquipment = "A spellbook (w/ Read Magic), a component pouch, ";
+      }
+      const meleeMod = abilityMods(STR);
+      return `
+Class: ${cls}    Race: ${race}    Alignment: ${alignment}
+Age: ${age}    AC: ${ac} (DEX Mod: ${dexACMod(DEX)})    HP: ${hp} (CON Mod: ${abilityMods(CON)})    Starting Gold: ${gold} gp
+XP Bonus: ${xpBonus}
+Movement Rate: ${movementRate}
+
+STR: ${getAbilityDetail(STR, 'STR')}
+INT: ${getAbilityDetail(INT, 'INT')}
+WIS: ${getAbilityDetail(WIS, 'WIS')}
+DEX: ${getAbilityDetail(DEX, 'DEX')}
+CON: ${getAbilityDetail(CON, 'CON')}
+CHA: ${getAbilityDetail(CHA, 'CHA')}
+
+ATTACK: Melee: ${meleeMod>= 0 ? '+' : ''}${meleeMod}, Missile: ${dexMissileMod(DEX)}
+
+Saving Throws:
+- Death Ray or Poison:      ${saves[0]}
+- Magic Wands:              ${saves[1]}
+- Paralysis or Turn to Stone: ${saves[2]}
+- Dragon Breath:            ${saves[3]}
+- Rods, Staves or Spells:   ${saves[4]}
+
+Abilities:
+${classes[cls].abilities}
+
+Equipment:
+${classEquipment}${pack}
+
+Armor:
+${armor} (${getAC(armor)})
+
+Weapons:
+${weapon}
+----------------------------------------`;
+    }
+
+    function generateCharacter() {
+      document.getElementById("characterSheet").textContent = buildCharacter();
+    }
+
+    function generateMultipleCharacters(count) {
+      const characters = Array.from({ length: count }, buildCharacter).join("\n\n");
+      document.getElementById("characterSheet").textContent = characters;
+    }
+
+    function downloadCharacter() {
+      const content = document.getElementById("characterSheet").textContent;
+      const blob = new Blob([content], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "BX_Character.txt";
+      link.click();
+    }
+  </script>
+</body>
+</html>
